@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import HTMLFlipBook from 'react-pageflip';
+import { FaUndo, FaRedo, FaVolumeMute, FaVolumeUp, FaExpand, FaCompress, FaThList, FaFileUpload, FaPlusSquare, FaMinusSquare, FaQuestionCircle } from 'react-icons/fa';
 
 const DEFAULT_NUM_CONTENT_PAGES = 3; // Number of content pages (not counting cover/closing)
 const CLOUD_NAME = 'dmnqwmozk'; // Your Cloudinary cloud name
@@ -323,32 +324,67 @@ const InformationSystem = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-4 px-1 sm:py-8 sm:px-4 flex flex-col items-center justify-center">
-      {/* Instructions Toggle Button */}
-      <div className="w-full max-w-3xl mx-auto flex justify-end mb-1">
-        <button
-          onClick={() => setShowInstructions((v) => !v)}
-          className="text-base px-5 py-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 shadow font-semibold transition"
-        >
-          {showInstructions ? 'Hide Instructions' : 'Show Instructions'}
-        </button>
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-4 px-1 sm:py-8 sm:px-4 flex flex-col items-center">
+      {/* Top Control Bar */}
+      <div className="w-full max-w-6xl mx-auto p-3 bg-white/90 rounded-xl shadow-lg mb-4 flex flex-col sm:flex-row justify-between items-center gap-3 border border-blue-200">
+        {/* Left Controls: Page Management */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="page-select" className="font-medium text-gray-700 text-sm whitespace-nowrap">Current Page:</label>
+          <select
+            id="page-select"
+            value={selectedPage}
+            onChange={e => setSelectedPage(Number(e.target.value))}
+            className="border rounded px-2 py-1.5 text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
+          >
+            {Array.from({ length: totalPages }).map((_, idx) => (
+              <option key={idx} value={idx}>{getPageLabel(idx)}</option>
+            ))}
+          </select>
+          <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 rounded-md shadow transition duration-200 ease-in-out flex items-center gap-1.5 text-sm">
+            <FaFileUpload /> {uploading ? 'Uploading...' : 'Upload'}
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} disabled={uploading} />
+          </label>
+          <button onClick={handleAddPage} className="bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-3 rounded-md shadow transition duration-200 ease-in-out flex items-center gap-1.5 text-sm" disabled={uploading}>
+            <FaPlusSquare /> Add
+          </button>
+          <button onClick={handleRemovePage} className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-3 rounded-md shadow transition duration-200 ease-in-out disabled:opacity-50 flex items-center gap-1.5 text-sm" disabled={numContentPages <= 1 || uploading}>
+            <FaMinusSquare /> Remove
+          </button>
+        </div>
+        {/* Right Controls: Tools & View */}
+        <div className="flex items-center gap-2">
+          <button onClick={handleUndo} className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 disabled:opacity-50 shadow-sm" title="Undo" disabled={history.length === 0}>
+            <FaUndo />
+          </button>
+          <button onClick={handleRedo} className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-700 disabled:opacity-50 shadow-sm" title="Redo" disabled={future.length === 0}>
+            <FaRedo />
+          </button>
+          <button onClick={() => setMuted((m) => !m)} className={`p-2 rounded-md ${muted ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'} text-white shadow-sm`} title={muted ? 'Unmute' : 'Mute'}>
+            {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+          </button>
+          <button onClick={handleFullscreen} className="p-2 rounded-md bg-gray-700 hover:bg-gray-800 text-white shadow-sm" title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+            {isFullscreen ? <FaCompress /> : <FaExpand />}
+          </button>
+          <button onClick={() => setShowInstructions((v) => !v)} className="p-2 rounded-md bg-blue-100 hover:bg-blue-200 text-blue-700 shadow-sm" title={showInstructions ? 'Hide Instructions' : 'Show Instructions'}>
+            <FaQuestionCircle />
+          </button>
+        </div>
       </div>
-      {/* Instructions Box */}
+
+      {/* Instructions Box (Toggleable) */}
       {showInstructions && (
-        <div className="w-full max-w-3xl mx-auto mb-6 p-4 bg-white/90 border border-blue-200 rounded-lg shadow text-blue-900 text-sm">
-          <strong className="block mb-1 text-blue-700">How to use the Flipbook:</strong>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Click <span className="font-semibold">Upload Image</span> to add an image to the selected page.</li>
-            <li>Or <span className="font-semibold">drag and drop</span> an image file directly onto any page.</li>
-            <li>Use <span className="font-semibold">+ Add Page</span> or <span className="font-semibold">- Remove Page</span> to change the number of pages.</li>
-            <li>Reorder pages by <span className="font-semibold">dragging and dropping thumbnails</span> below the book.</li>
-            <li>Use <span className="font-semibold">Undo</span> and <span className="font-semibold">Redo</span> to revert or repeat changes.</li>
-            <li>Click <span className="font-semibold">Fullscreen</span> for an immersive view.</li>
-            <li>Navigate quickly using the <span className="font-semibold">table of contents</span> or thumbnails.</li>
+        <div className="w-full max-w-3xl mx-auto mb-4 p-3 bg-white/80 border border-blue-200 rounded-lg shadow text-blue-800 text-xs">
+          <strong className="block mb-1 text-blue-600">How to use:</strong>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li><span className="font-semibold">Upload/Drag Image:</span> Add images to pages.</li>
+            <li><span className="font-semibold">Add/Remove Page:</span> Change page count.</li>
+            <li><span className="font-semibold">Undo/Redo:</span> Revert actions.</li>
+            <li><span className="font-semibold">Thumbnails:</span> Drag to reorder pages.</li>
           </ul>
         </div>
       )}
-      {/* Progress bar and animated page number */}
+
+      {/* Progress bar and page number */}
       <div className="w-full max-w-5xl mx-auto mb-2">
         <div className="h-2 bg-gray-300 rounded">
           <div
@@ -370,12 +406,13 @@ const InformationSystem = () => {
           </span>
         </div>
       </div>
-      {/* Table of Contents Quick Navigation */}
-      <ul className="flex flex-wrap gap-2 mb-4">
+
+      {/* Table of Contents (optional, can be integrated or removed) */}
+      <ul className="flex flex-wrap gap-1.5 mb-3 text-xs">
         {Array.from({ length: totalPages }).map((_, idx) => (
           <li key={idx}>
             <button
-              className={`px-2 py-1 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+              className={`px-1.5 py-0.5 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
               onClick={() => handleQuickNav(idx)}
             >
               {getPageLabel(idx)}
@@ -383,79 +420,7 @@ const InformationSystem = () => {
           </li>
         ))}
       </ul>
-      {/* Controls above the book */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 w-full max-w-5xl justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
-          <label htmlFor="page-select" className="font-medium text-gray-700">Select Page:</label>
-          <select
-            id="page-select"
-            value={selectedPage}
-            onChange={e => setSelectedPage(Number(e.target.value))}
-            className="border rounded px-2 py-1"
-          >
-            {Array.from({ length: totalPages }).map((_, idx) => (
-              <option key={idx} value={idx}>{getPageLabel(idx)}</option>
-            ))}
-          </select>
-          <label className="ml-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out">
-            {uploading ? 'Uploading...' : 'Upload Image'}
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleImageUpload}
-              disabled={uploading}
-            />
-          </label>
-          <button
-            onClick={handleAddPage}
-            className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out"
-            disabled={uploading}
-          >
-            + Add Page
-          </button>
-          <button
-            onClick={handleRemovePage}
-            className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
-            disabled={numContentPages <= 1 || uploading}
-          >
-            - Remove Page
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleUndo}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
-            disabled={history.length === 0}
-          >
-            Undo
-          </button>
-          <button
-            onClick={handleRedo}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
-            disabled={future.length === 0}
-          >
-            Redo
-          </button>
-          <button
-            onClick={() => setMuted((m) => !m)}
-            className={`bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out ${muted ? 'opacity-60' : ''}`}
-            title={muted ? 'Unmute Flip Sound' : 'Mute Flip Sound'}
-          >
-            {muted ? 'Unmute Sound' : 'Mute Sound'}
-          </button>
-        </div>
-        <button
-          onClick={handleFullscreen}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out"
-        >
-          {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-        </button>
-      </div>
-      {/* Note for drag-and-drop page arrangement */}
-      <div className="w-full max-w-5xl mx-auto text-center text-sm text-blue-700 mb-2">
-        <span className="inline-block bg-blue-100 px-3 py-1 rounded">Tip: Drag and drop the thumbnails below to rearrange pages!</span>
-      </div>
+
       {/* Book Container */}
       <div
         ref={bookContainerRef}
@@ -578,6 +543,7 @@ const InformationSystem = () => {
           </HTMLFlipBook>
         </div>
       </div>
+
       {/* Page Thumbnails Row */}
       <div className="w-full max-w-5xl mx-auto mt-4 overflow-x-auto">
         <div className="flex gap-2 pb-2">
