@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import HTMLFlipBook from 'react-pageflip';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaVolumeMute, FaVolumeUp, FaThList } from 'react-icons/fa';
 
 const Viewing = () => {
   const [images, setImages] = useState([]);
   const [totalPages, setTotalPages] = useState(0);
   const flipBookRef = useRef();
   const [selectedPage, setSelectedPage] = useState(0);
-  const bookContainerRef = useRef(null);
+  const [showToc, setShowToc] = useState(false);
 
   // Flip sound files
   const flipSounds = [
@@ -29,8 +29,8 @@ const Viewing = () => {
           const maxPage = data.reduce((max, img) => Math.max(max, img.pageIndex), 0);
           const imgs = Array(maxPage + 1).fill(null);
           data.forEach(img => {
-            if (typeof img.pageIndex === 'number' && img.url) {
-              imgs[img.pageIndex] = img.url;
+            if (typeof img.pageIndex === 'number') {
+              imgs[img.pageIndex] = { url: img.url, pageName: img.pageName };
             }
           });
           setImages(imgs);
@@ -40,6 +40,7 @@ const Viewing = () => {
   }, []);
 
   const getPageLabel = (idx) => {
+    if (images[idx] && images[idx].pageName && images[idx].pageName.trim()) return images[idx].pageName;
     if (idx === 0) return 'Cover';
     if (idx === totalPages - 1) return 'Closing';
     return `Page ${idx}`;
@@ -68,17 +69,9 @@ const Viewing = () => {
     if (selectedPage < totalPages - 1) goToPage(selectedPage + 1);
   };
 
-  // Responsive book size
-  const bookWidth = window.innerWidth < 640
-    ? 320
-    : window.innerWidth < 1024
-    ? 480
-    : 600;
-  const bookHeight = window.innerWidth < 640
-    ? 420
-    : window.innerWidth < 1024
-    ? 640
-    : 800;
+  // Responsive book size (no fullscreen)
+  const bookRenderWidth = window.innerWidth < 640 ? 320 : window.innerWidth < 1024 ? 480 : 600;
+  const bookRenderHeight = window.innerWidth < 640 ? 420 : window.innerWidth < 1024 ? 640 : 800;
   const minWidth = 220;
   const maxWidth = 1000;
   const minHeight = 320;
@@ -101,7 +94,6 @@ const Viewing = () => {
       </div>
       <div className="w-full flex justify-center items-center max-w-7xl">
         <div
-          ref={bookContainerRef}
           className="relative w-full h-full flex justify-center items-center max-w-5xl"
           style={{
             perspective: "2500px",
@@ -110,8 +102,8 @@ const Viewing = () => {
         >
           <HTMLFlipBook
             ref={flipBookRef}
-            width={bookWidth}
-            height={bookHeight}
+            width={bookRenderWidth}
+            height={bookRenderHeight}
             size="stretch"
             minWidth={minWidth}
             maxWidth={maxWidth}
@@ -143,9 +135,9 @@ const Viewing = () => {
                   padding: 0,
                 }}
               >
-                {img ? (
+                {img && img.url ? (
                   <img
-                    src={img}
+                    src={img.url}
                     alt={`Page ${idx} image`}
                     style={{
                       width: '100%',
@@ -180,35 +172,62 @@ const Viewing = () => {
         </div>
       </div>
       {/* Quick Settings Bar */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 shadow-lg rounded-full flex items-center gap-2 px-4 py-2 z-50 border border-gray-200" style={{ minWidth: 160 }}>
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/90 shadow-xl rounded-lg flex items-center gap-1 px-1.5 py-1 z-50 border border-gray-300" style={{ minWidth: 0 }}>
         <button
           onClick={handlePrev}
-          className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
           disabled={selectedPage === 0}
           title="Previous Page"
         >
-          <FaChevronLeft size={16} />
+          <FaChevronLeft size={14} />
+        </button>
+        <button
+          onClick={() => setShowToc((s) => !s)}
+          className={`p-1.5 rounded-full ${showToc ? 'bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+          title={showToc ? 'Hide Table of Contents' : 'Show Table of Contents'}
+        >
+          <FaThList size={14} />
         </button>
         <button
           onClick={() => setMuted((m) => !m)}
-          className={`p-2 rounded-full ${muted ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-          title={muted ? 'Unmute Flip Sound' : 'Mute Flip Sound'}
+          className={`p-1.5 rounded-full ${muted ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+          title={muted ? 'Unmute' : 'Mute'}
         >
           {muted ? (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 9l6 6m0-6l-6 6" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <FaVolumeMute size={14} />
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m9-9H3" /></svg>
+            <FaVolumeUp size={14} />
           )}
         </button>
         <button
           onClick={handleNext}
-          className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
           disabled={selectedPage === totalPages - 1}
           title="Next Page"
         >
-          <FaChevronRight size={16} />
+          <FaChevronRight size={14} />
         </button>
       </div>
+      {/* Table of Contents Modal (Toggleable) */}
+      {showToc && (
+        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setShowToc(false)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-blue-700 mb-3">Table of Contents</h3>
+            <ul className="space-y-1">
+              {images.map((_, idx) => (
+                <li key={idx}>
+                  <button
+                    onClick={() => { goToPage(idx); setShowToc(false); }}
+                    className={`w-full text-left px-3 py-1.5 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'hover:bg-blue-100'} transition-colors text-sm`}
+                  >
+                    {getPageLabel(idx)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

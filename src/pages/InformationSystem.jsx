@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import HTMLFlipBook from 'react-pageflip';
-import { FaUndo, FaRedo, FaVolumeMute, FaVolumeUp, FaExpand, FaCompress, FaThList, FaFileUpload, FaPlusSquare, FaMinusSquare, FaQuestionCircle } from 'react-icons/fa';
+import { FaUndo, FaRedo, FaVolumeMute, FaVolumeUp, FaExpand, FaCompress, FaThList, FaFileUpload, FaPlusSquare, FaMinusSquare, FaQuestionCircle, FaPencilAlt, FaCheck, FaTimes } from 'react-icons/fa';
 
 const DEFAULT_NUM_CONTENT_PAGES = 3; // Number of content pages (not counting cover/closing)
 const CLOUD_NAME = 'dmnqwmozk'; // Your Cloudinary cloud name
@@ -25,6 +25,15 @@ const InformationSystem = () => {
   const [draggedThumb, setDraggedThumb] = useState(null);
   const [showInstructions, setShowInstructions] = useState(true);
   const [muted, setMuted] = useState(false);
+  // Add pageNames state
+  const [pageNames, setPageNames] = useState(() => [
+    'Cover',
+    ...Array(DEFAULT_NUM_CONTENT_PAGES).fill(null).map((_, i) => `Page ${i + 1}`),
+    'Closing',
+  ]);
+  // For editing page names
+  const [editingPageNameIdx, setEditingPageNameIdx] = useState(null);
+  const [editingPageNameValue, setEditingPageNameValue] = useState('');
 
   // Helper to push to history
   const pushToHistory = (images, numContentPages) => {
@@ -90,6 +99,15 @@ const InformationSystem = () => {
             });
             return newImages;
           });
+          setPageNames(prev => {
+            const newNames = [...prev];
+            data.forEach(img => {
+              if (typeof img.pageIndex === 'number' && img.pageName) {
+                newNames[img.pageIndex] = img.pageName;
+              }
+            });
+            return newNames;
+          });
         }
       })
       .catch(err => {
@@ -136,7 +154,7 @@ const InformationSystem = () => {
           await fetch('http://localhost:3000/api/images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage }),
+            body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage, pageName: pageNames[selectedPage] }),
           });
         } catch (err) {
           // Optionally handle backend error
@@ -181,7 +199,7 @@ const InformationSystem = () => {
             await fetch('http://localhost:3000/api/images', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: data.secure_url, pageIndex: idx }),
+              body: JSON.stringify({ url: data.secure_url, pageIndex: idx, pageName: pageNames[idx] }),
             });
           } catch (err) {
             console.error('Failed to save image info to backend', err);
@@ -279,6 +297,7 @@ const InformationSystem = () => {
 
   // Page label helper
   const getPageLabel = (idx) => {
+    if (pageNames[idx]) return pageNames[idx];
     if (idx === 0) return 'Cover';
     if (idx === totalPages - 1) return 'Closing';
     return `Page ${idx}`;
@@ -321,6 +340,41 @@ const InformationSystem = () => {
   };
   const handleThumbDragEnd = () => {
     setDraggedThumb(null);
+  };
+
+  // Ensure pageNames array always matches totalPages
+  React.useEffect(() => {
+    setPageNames((prev) => {
+      if (prev.length === totalPages) return prev;
+      const newNames = [];
+      for (let i = 0; i < totalPages; i++) {
+        if (i === 0) newNames.push('Cover');
+        else if (i === totalPages - 1) newNames.push('Closing');
+        else newNames.push((prev[i] && prev[i] !== 'Closing') ? prev[i] : `Page ${i}`);
+      }
+      return newNames;
+    });
+  }, [totalPages]);
+
+  // Save page name
+  const handleSavePageName = (idx) => {
+    setPageNames((prev) => {
+      const newNames = [...prev];
+      newNames[idx] = editingPageNameValue.trim() || getPageLabel(idx);
+      return newNames;
+    });
+    setEditingPageNameIdx(null);
+    setEditingPageNameValue('');
+  };
+  // Cancel edit
+  const handleCancelPageName = () => {
+    setEditingPageNameIdx(null);
+    setEditingPageNameValue('');
+  };
+  // Start editing
+  const handleEditPageName = (idx) => {
+    setEditingPageNameIdx(idx);
+    setEditingPageNameValue(pageNames[idx] || getPageLabel(idx));
   };
 
   return (
@@ -380,6 +434,7 @@ const InformationSystem = () => {
             <li><span className="font-semibold">Add/Remove Page:</span> Change page count.</li>
             <li><span className="font-semibold">Undo/Redo:</span> Revert actions.</li>
             <li><span className="font-semibold">Thumbnails:</span> Drag to reorder pages.</li>
+            <li><span className="font-semibold">Rename Page:</span> Click the <span style={{display:'inline-block'}}><svg width="12" height="12" style={{display:'inline',verticalAlign:'middle'}}><path d="M2 10l1.5-1.5 6-6a1 1 0 0 0-1.5-1.5l-6 6L2 10zm8.5-7.5a2 2 0 0 1 0 2.828l-6 6A2 2 0 0 1 2 10l1.5-1.5 6-6a2 2 0 0 1 2.828 0z" fill="#2563eb"/></svg></span> icon in the Table of Contents to set a custom name for any page.</li>
           </ul>
         </div>
       )}
@@ -410,13 +465,32 @@ const InformationSystem = () => {
       {/* Table of Contents (optional, can be integrated or removed) */}
       <ul className="flex flex-wrap gap-1.5 mb-3 text-xs">
         {Array.from({ length: totalPages }).map((_, idx) => (
-          <li key={idx}>
+          <li key={idx} className="flex items-center gap-1">
             <button
               className={`px-1.5 py-0.5 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
               onClick={() => handleQuickNav(idx)}
             >
               {getPageLabel(idx)}
             </button>
+            {/* Edit icon or input */}
+            {editingPageNameIdx === idx ? (
+              <span className="flex items-center gap-1">
+                <input
+                  className="border rounded px-1 py-0.5 text-xs w-24"
+                  value={editingPageNameValue}
+                  onChange={e => setEditingPageNameValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSavePageName(idx);
+                    if (e.key === 'Escape') handleCancelPageName();
+                  }}
+                  autoFocus
+                />
+                <button className="text-green-600 hover:text-green-800" onClick={() => handleSavePageName(idx)} title="Save"><FaCheck /></button>
+                <button className="text-red-600 hover:text-red-800" onClick={handleCancelPageName} title="Cancel"><FaTimes /></button>
+              </span>
+            ) : (
+              <button className="text-gray-400 hover:text-blue-600" onClick={() => handleEditPageName(idx)} title="Edit page name"><FaPencilAlt /></button>
+            )}
           </li>
         ))}
       </ul>
