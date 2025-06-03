@@ -16,6 +16,50 @@ const InformationSystem = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pageNumberKey, setPageNumberKey] = useState(0); // For animation
+  const [dragOverPage, setDragOverPage] = useState(null);
+  // Undo/Redo history
+  const [history, setHistory] = useState([]);
+  const [future, setFuture] = useState([]);
+  // Drag-and-drop for page reordering
+  const [draggedThumb, setDraggedThumb] = useState(null);
+  const [showInstructions, setShowInstructions] = useState(true);
+  const [muted, setMuted] = useState(false);
+
+  // Helper to push to history
+  const pushToHistory = (images, numContentPages) => {
+    setHistory((prev) => [...prev, { images: [...images], numContentPages }]);
+    setFuture([]); // Clear redo stack
+  };
+
+  // Undo
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    setFuture((f) => [{ images: [...images], numContentPages }, ...f]);
+    const last = history[history.length - 1];
+    setImages([...last.images]);
+    setNumContentPages(last.numContentPages);
+    setHistory((prev) => prev.slice(0, -1));
+  };
+
+  // Redo
+  const handleRedo = () => {
+    if (future.length === 0) return;
+    setHistory((prev) => [...prev, { images: [...images], numContentPages }]);
+    const next = future[0];
+    setImages([...next.images]);
+    setNumContentPages(next.numContentPages);
+    setFuture((f) => f.slice(1));
+  };
+
+  // Wrap state-changing actions to push to history
+  const wrappedSetImages = (newImages) => {
+    pushToHistory(images, numContentPages);
+    setImages(newImages);
+  };
+  const wrappedSetNumContentPages = (newNum) => {
+    pushToHistory(images, numContentPages);
+    setNumContentPages(newNum);
+  };
 
   // Ensure images array always matches totalPages
   React.useEffect(() => {
@@ -53,8 +97,16 @@ const InformationSystem = () => {
       });
   }, [totalPages]);
 
+  // Flip sound files
+  const flipSounds = [
+    '/flip.mp3',
+    '/flip2.mp3',
+    '/flip3.mp3',
+    '/flip4.mp3',
+    '/flip5.mp3',
+  ];
   // Page flip sound
-  const flipSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/page-flip.mp3') : null);
+  const flipSound = useRef(null);
 
   // Handle image upload for the selected page (Cloudinary)
   const handleImageUpload = async (e) => {
@@ -77,7 +129,7 @@ const InformationSystem = () => {
       if (data.secure_url) {
         const newImages = [...images];
         newImages[selectedPage] = data.secure_url;
-        setImages(newImages);
+        wrappedSetImages(newImages);
         // Send to backend
         try {
           await fetch('http://localhost:3000/api/images', {
@@ -99,15 +151,60 @@ const InformationSystem = () => {
     }
   };
 
+  // Handle drag-and-drop for image upload
+  const handlePageDrop = async (e, idx) => {
+    e.preventDefault();
+    setDragOverPage(null);
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) {
+      // Reuse handleImageUpload logic for dropped file
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', UPLOAD_PRESET);
+      setUploading(true);
+      try {
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+        const data = await response.json();
+        if (data.secure_url) {
+          const newImages = [...images];
+          newImages[idx] = data.secure_url;
+          wrappedSetImages(newImages);
+          // Send to backend
+          try {
+            await fetch('http://localhost:3000/api/images', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: data.secure_url, pageIndex: idx }),
+            });
+          } catch (err) {
+            console.error('Failed to save image info to backend', err);
+          }
+        } else {
+          alert('Upload failed!');
+        }
+      } catch (err) {
+        alert('Upload error!');
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
   // Add a new content page (between cover and closing)
   const handleAddPage = () => {
-    setNumContentPages((prev) => prev + 1);
+    wrappedSetNumContentPages(numContentPages + 1);
   };
 
   // Remove the last content page (not cover/closing)
   const handleRemovePage = () => {
     if (numContentPages > 1) {
-      setNumContentPages((prev) => prev - 1);
+      wrappedSetNumContentPages(numContentPages - 1);
       if (selectedPage >= totalPages - 2) setSelectedPage(totalPages - 3);
     }
   };
@@ -160,11 +257,23 @@ const InformationSystem = () => {
   }, []);
 
   // Book size
-  const bookWidth = isFullscreen ? '100vw' : 600;
-  const bookHeight = isFullscreen ? '100vh' : 800;
-  const minWidth = isFullscreen ? '100vw' : 315;
+  const bookWidth = isFullscreen
+    ? '100vw'
+    : window.innerWidth < 640
+    ? 320
+    : window.innerWidth < 1024
+    ? 480
+    : 600;
+  const bookHeight = isFullscreen
+    ? '100vh'
+    : window.innerWidth < 640
+    ? 420
+    : window.innerWidth < 1024
+    ? 640
+    : 800;
+  const minWidth = isFullscreen ? '100vw' : 220;
   const maxWidth = isFullscreen ? '100vw' : 1000;
-  const minHeight = isFullscreen ? '100vh' : 420;
+  const minHeight = isFullscreen ? '100vh' : 320;
   const maxHeight = isFullscreen ? '100vh' : 1333;
 
   // Page label helper
@@ -185,14 +294,60 @@ const InformationSystem = () => {
   const handleFlip = (e) => {
     setSelectedPage(e.data);
     setPageNumberKey((k) => k + 1); // For animation
-    if (flipSound.current) {
+    if (!muted && typeof Audio !== 'undefined') {
+      const randomSound = flipSounds[Math.floor(Math.random() * flipSounds.length)];
+      flipSound.current = new Audio(randomSound);
       flipSound.current.currentTime = 0;
       flipSound.current.play();
     }
   };
 
+  // Drag-and-drop for page reordering
+  const handleThumbDragStart = (idx) => {
+    setDraggedThumb(idx);
+  };
+  const handleThumbDragOver = (e) => {
+    e.preventDefault();
+  };
+  const handleThumbDrop = (idx) => {
+    if (draggedThumb === null || draggedThumb === idx) return;
+    // Reorder images
+    const newImages = [...images];
+    const [removed] = newImages.splice(draggedThumb, 1);
+    newImages.splice(idx, 0, removed);
+    wrappedSetImages(newImages);
+    setDraggedThumb(null);
+  };
+  const handleThumbDragEnd = () => {
+    setDraggedThumb(null);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-4 px-1 sm:py-8 sm:px-4 flex flex-col items-center justify-center">
+      {/* Instructions Toggle Button */}
+      <div className="w-full max-w-3xl mx-auto flex justify-end mb-1">
+        <button
+          onClick={() => setShowInstructions((v) => !v)}
+          className="text-base px-5 py-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 shadow font-semibold transition"
+        >
+          {showInstructions ? 'Hide Instructions' : 'Show Instructions'}
+        </button>
+      </div>
+      {/* Instructions Box */}
+      {showInstructions && (
+        <div className="w-full max-w-3xl mx-auto mb-6 p-4 bg-white/90 border border-blue-200 rounded-lg shadow text-blue-900 text-sm">
+          <strong className="block mb-1 text-blue-700">How to use the Flipbook:</strong>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Click <span className="font-semibold">Upload Image</span> to add an image to the selected page.</li>
+            <li>Or <span className="font-semibold">drag and drop</span> an image file directly onto any page.</li>
+            <li>Use <span className="font-semibold">+ Add Page</span> or <span className="font-semibold">- Remove Page</span> to change the number of pages.</li>
+            <li>Reorder pages by <span className="font-semibold">dragging and dropping thumbnails</span> below the book.</li>
+            <li>Use <span className="font-semibold">Undo</span> and <span className="font-semibold">Redo</span> to revert or repeat changes.</li>
+            <li>Click <span className="font-semibold">Fullscreen</span> for an immersive view.</li>
+            <li>Navigate quickly using the <span className="font-semibold">table of contents</span> or thumbnails.</li>
+          </ul>
+        </div>
+      )}
       {/* Progress bar and animated page number */}
       <div className="w-full max-w-5xl mx-auto mb-2">
         <div className="h-2 bg-gray-300 rounded">
@@ -242,7 +397,7 @@ const InformationSystem = () => {
               <option key={idx} value={idx}>{getPageLabel(idx)}</option>
             ))}
           </select>
-          <label className="ml-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out">
+          <label className="ml-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out">
             {uploading ? 'Uploading...' : 'Upload Image'}
             <input
               type="file"
@@ -254,37 +409,64 @@ const InformationSystem = () => {
           </label>
           <button
             onClick={handleAddPage}
-            className="ml-2 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out"
+            className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out"
             disabled={uploading}
           >
             + Add Page
           </button>
           <button
             onClick={handleRemovePage}
-            className="ml-2 bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out"
+            className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
             disabled={numContentPages <= 1 || uploading}
           >
             - Remove Page
           </button>
         </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleUndo}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
+            disabled={history.length === 0}
+          >
+            Undo
+          </button>
+          <button
+            onClick={handleRedo}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out disabled:opacity-50"
+            disabled={future.length === 0}
+          >
+            Redo
+          </button>
+          <button
+            onClick={() => setMuted((m) => !m)}
+            className={`bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out ${muted ? 'opacity-60' : ''}`}
+            title={muted ? 'Unmute Flip Sound' : 'Mute Flip Sound'}
+          >
+            {muted ? 'Unmute Sound' : 'Mute Sound'}
+          </button>
+        </div>
         <button
           onClick={handleFullscreen}
-          className="bg-gray-800 hover:bg-gray-900 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg shadow transition duration-200 ease-in-out"
         >
           {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         </button>
       </div>
+      {/* Note for drag-and-drop page arrangement */}
+      <div className="w-full max-w-5xl mx-auto text-center text-sm text-blue-700 mb-2">
+        <span className="inline-block bg-blue-100 px-3 py-1 rounded">Tip: Drag and drop the thumbnails below to rearrange pages!</span>
+      </div>
       {/* Book Container */}
       <div
         ref={bookContainerRef}
-        className={`mx-auto w-full flex justify-center items-center ${isFullscreen ? '' : 'max-w-7xl'}`}
+        className={`mx-auto w-full flex justify-center items-center ${isFullscreen ? '' : 'max-w-7xl'} px-0 sm:px-4`}
         style={{
           position: 'relative',
           zIndex: 1,
-          width: isFullscreen ? 'calc(100vw - 80px)' : undefined,
-          height: isFullscreen ? 'calc(100vh - 80px)' : undefined,
-          maxWidth: isFullscreen ? 'calc(100vw - 80px)' : undefined,
-          maxHeight: isFullscreen ? 'calc(100vh - 80px)' : undefined,
+          width: isFullscreen ? '100vw' : undefined,
+          height: isFullscreen ? '100vh' : undefined,
+          maxWidth: isFullscreen ? '100vw' : undefined,
+          maxHeight: isFullscreen ? '100vh' : undefined,
           margin: isFullscreen ? '40px' : undefined,
           boxSizing: isFullscreen ? 'border-box' : undefined,
         }}
@@ -337,7 +519,7 @@ const InformationSystem = () => {
             {Array.from({ length: totalPages }).map((_, idx) => (
               <div
                 key={idx}
-                className="page flex items-center justify-center"
+                className={`page flex items-center justify-center ${dragOverPage === idx ? 'ring-4 ring-blue-400' : ''}`}
                 style={{
                   background: 'black',
                   width: '100%',
@@ -349,6 +531,15 @@ const InformationSystem = () => {
                   justifyContent: 'center',
                   padding: 0,
                 }}
+                onDragOver={e => {
+                  e.preventDefault();
+                  setDragOverPage(idx);
+                }}
+                onDragLeave={e => {
+                  e.preventDefault();
+                  setDragOverPage(null);
+                }}
+                onDrop={e => handlePageDrop(e, idx)}
               >
                 {images[idx] ? (
                   <img
@@ -385,6 +576,35 @@ const InformationSystem = () => {
               </div>
             ))}
           </HTMLFlipBook>
+        </div>
+      </div>
+      {/* Page Thumbnails Row */}
+      <div className="w-full max-w-5xl mx-auto mt-4 overflow-x-auto">
+        <div className="flex gap-2 pb-2">
+          {Array.from({ length: totalPages }).map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleQuickNav(idx)}
+              className={`border-2 rounded-md focus:outline-none transition-all duration-200 ${selectedPage === idx ? 'border-blue-600 ring-2 ring-blue-300' : 'border-gray-300'} bg-white ${draggedThumb === idx ? 'opacity-60' : ''}`}
+              style={{ minWidth: 48, minHeight: 64, width: 48, height: 64, overflow: 'hidden', position: 'relative' }}
+              title={getPageLabel(idx)}
+              draggable
+              onDragStart={() => handleThumbDragStart(idx)}
+              onDragOver={handleThumbDragOver}
+              onDrop={() => handleThumbDrop(idx)}
+              onDragEnd={handleThumbDragEnd}
+            >
+              {images[idx] ? (
+                <img
+                  src={images[idx]}
+                  alt={`Thumbnail for ${getPageLabel(idx)}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : (
+                <span style={{ color: '#888', fontSize: '0.7rem', opacity: 0.7, position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>{getPageLabel(idx)}</span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
     </div>
