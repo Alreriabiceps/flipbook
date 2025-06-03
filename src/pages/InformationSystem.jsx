@@ -1,42 +1,114 @@
 import React, { useState, useRef } from 'react';
 import HTMLFlipBook from 'react-pageflip';
 
-const DEFAULT_NUM_PAGES = 6;
+const DEFAULT_NUM_CONTENT_PAGES = 3; // Number of content pages (not counting cover/closing)
+const CLOUD_NAME = 'dmnqwmozk'; // Your Cloudinary cloud name
+const UPLOAD_PRESET = 'graduates1'; // Your unsigned preset
 
 const InformationSystem = () => {
-  // Store image URLs for each page
-  const [numPages, setNumPages] = useState(DEFAULT_NUM_PAGES);
-  const [images, setImages] = useState(Array(DEFAULT_NUM_PAGES).fill(null));
+  // Always have cover + content pages + closing
+  const [numContentPages, setNumContentPages] = useState(DEFAULT_NUM_CONTENT_PAGES);
+  const totalPages = numContentPages + 2; // +2 for cover and closing
+  const [images, setImages] = useState(() => Array(totalPages).fill(null));
   const [selectedPage, setSelectedPage] = useState(0);
   const bookContainerRef = useRef(null);
+  const flipBookRef = useRef();
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [pageNumberKey, setPageNumberKey] = useState(0); // For animation
 
-  // Handle image upload for the selected page
-  const handleImageUpload = (e) => {
+  // Ensure images array always matches totalPages
+  React.useEffect(() => {
+    setImages((prev) => {
+      if (prev.length === totalPages) return prev;
+      if (prev.length < totalPages) {
+        // Add nulls for new pages
+        return [...prev, ...Array(totalPages - prev.length).fill(null)];
+      }
+      // Remove extra pages
+      return prev.slice(0, totalPages);
+    });
+  }, [totalPages]);
+
+  // Fetch images from backend on mount
+  React.useEffect(() => {
+    fetch('http://localhost:3000/api/images')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setImages(prev => {
+            const newImages = [...prev];
+            data.forEach(img => {
+              if (typeof img.pageIndex === 'number' && img.url) {
+                newImages[img.pageIndex] = img.url;
+              }
+            });
+            return newImages;
+          });
+        }
+      })
+      .catch(err => {
+        // Optionally handle error
+        console.error('Failed to fetch images from backend', err);
+      });
+  }, [totalPages]);
+
+  // Page flip sound
+  const flipSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/page-flip.mp3') : null);
+
+  // Handle image upload for the selected page (Cloudinary)
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    setUploading(true);
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+      const data = await response.json();
+      if (data.secure_url) {
         const newImages = [...images];
-        newImages[selectedPage] = event.target.result;
+        newImages[selectedPage] = data.secure_url;
         setImages(newImages);
-      };
-      reader.readAsDataURL(file);
+        // Send to backend
+        try {
+          await fetch('http://localhost:3000/api/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage }),
+          });
+        } catch (err) {
+          // Optionally handle backend error
+          console.error('Failed to save image info to backend', err);
+        }
+      } else {
+        alert('Upload failed!');
+      }
+    } catch (err) {
+      alert('Upload error!');
+    } finally {
+      setUploading(false);
     }
   };
 
-  // Add a new page
+  // Add a new content page (between cover and closing)
   const handleAddPage = () => {
-    setImages((prev) => [...prev, null]);
-    setNumPages((prev) => prev + 1);
+    setNumContentPages((prev) => prev + 1);
   };
 
-  // Remove the last page (if more than 1)
+  // Remove the last content page (not cover/closing)
   const handleRemovePage = () => {
-    if (numPages > 1) {
-      setImages((prev) => prev.slice(0, -1));
-      setNumPages((prev) => prev - 1);
-      if (selectedPage >= numPages - 1) setSelectedPage(numPages - 2);
+    if (numContentPages > 1) {
+      setNumContentPages((prev) => prev - 1);
+      if (selectedPage >= totalPages - 2) setSelectedPage(totalPages - 3);
     }
   };
 
@@ -95,8 +167,67 @@ const InformationSystem = () => {
   const minHeight = isFullscreen ? '100vh' : 420;
   const maxHeight = isFullscreen ? '100vh' : 1333;
 
+  // Page label helper
+  const getPageLabel = (idx) => {
+    if (idx === 0) return 'Cover';
+    if (idx === totalPages - 1) return 'Closing';
+    return `Page ${idx}`;
+  };
+
+  // Table of contents quick nav
+  const handleQuickNav = (idx) => {
+    if (flipBookRef.current && flipBookRef.current.pageFlip) {
+      flipBookRef.current.pageFlip().flip(idx);
+    }
+  };
+
+  // On page flip, update selectedPage, play sound, animate page number
+  const handleFlip = (e) => {
+    setSelectedPage(e.data);
+    setPageNumberKey((k) => k + 1); // For animation
+    if (flipSound.current) {
+      flipSound.current.currentTime = 0;
+      flipSound.current.play();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
+      {/* Progress bar and animated page number */}
+      <div className="w-full max-w-5xl mx-auto mb-2">
+        <div className="h-2 bg-gray-300 rounded">
+          <div
+            className="h-2 bg-blue-500 rounded transition-all duration-300"
+            style={{ width: `${((selectedPage + 1) / totalPages) * 100}%` }}
+          />
+        </div>
+        <div className="text-center text-xs text-gray-700 mt-1">
+          <span
+            key={pageNumberKey}
+            style={{
+              display: 'inline-block',
+              transition: 'opacity 0.4s',
+              opacity: 1,
+              animation: 'fadeIn 0.4s',
+            }}
+          >
+            {getPageLabel(selectedPage)} ({selectedPage + 1} / {totalPages})
+          </span>
+        </div>
+      </div>
+      {/* Table of Contents Quick Navigation */}
+      <ul className="flex flex-wrap gap-2 mb-4">
+        {Array.from({ length: totalPages }).map((_, idx) => (
+          <li key={idx}>
+            <button
+              className={`px-2 py-1 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+              onClick={() => handleQuickNav(idx)}
+            >
+              {getPageLabel(idx)}
+            </button>
+          </li>
+        ))}
+      </ul>
       {/* Controls above the book */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 w-full max-w-5xl justify-between">
         <div className="flex items-center gap-2 flex-wrap">
@@ -107,29 +238,31 @@ const InformationSystem = () => {
             onChange={e => setSelectedPage(Number(e.target.value))}
             className="border rounded px-2 py-1"
           >
-            {Array.from({ length: numPages }).map((_, idx) => (
-              <option key={idx} value={idx}>Page {idx + 1}</option>
+            {Array.from({ length: totalPages }).map((_, idx) => (
+              <option key={idx} value={idx}>{getPageLabel(idx)}</option>
             ))}
           </select>
           <label className="ml-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out">
-            Upload Image
+            {uploading ? 'Uploading...' : 'Upload Image'}
             <input
               type="file"
               accept="image/*"
               style={{ display: 'none' }}
               onChange={handleImageUpload}
+              disabled={uploading}
             />
           </label>
           <button
             onClick={handleAddPage}
             className="ml-2 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out"
+            disabled={uploading}
           >
             + Add Page
           </button>
           <button
             onClick={handleRemovePage}
             className="ml-2 bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-4 rounded-lg transition duration-200 ease-in-out"
-            disabled={numPages <= 1}
+            disabled={numContentPages <= 1 || uploading}
           >
             - Remove Page
           </button>
@@ -148,12 +281,21 @@ const InformationSystem = () => {
         style={{
           position: 'relative',
           zIndex: 1,
-          width: isFullscreen ? '100vw' : undefined,
-          height: isFullscreen ? '100vh' : undefined,
-          maxWidth: isFullscreen ? '100vw' : undefined,
-          maxHeight: isFullscreen ? '100vh' : undefined,
+          width: isFullscreen ? 'calc(100vw - 80px)' : undefined,
+          height: isFullscreen ? 'calc(100vh - 80px)' : undefined,
+          maxWidth: isFullscreen ? 'calc(100vw - 80px)' : undefined,
+          maxHeight: isFullscreen ? 'calc(100vh - 80px)' : undefined,
+          margin: isFullscreen ? '40px' : undefined,
+          boxSizing: isFullscreen ? 'border-box' : undefined,
         }}
       >
+        {/* Spinner overlay when uploading */}
+        {uploading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+            <span className="ml-4 text-white text-lg font-semibold">Uploading...</span>
+          </div>
+        )}
         <div
           className={`relative w-full flex justify-center ${isFullscreen ? '' : 'max-w-5xl'}`}
           style={{
@@ -174,6 +316,7 @@ const InformationSystem = () => {
           ></div>
 
           <HTMLFlipBook
+            ref={flipBookRef}
             width={bookWidth}
             height={bookHeight}
             size="stretch"
@@ -189,8 +332,9 @@ const InformationSystem = () => {
             flippingTime={800}
             className="mx-auto relative z-10 shadow-xl"
             style={{ transformStyle: "preserve-3d" }}
+            onFlip={handleFlip}
           >
-            {Array.from({ length: numPages }).map((_, idx) => (
+            {Array.from({ length: totalPages }).map((_, idx) => (
               <div
                 key={idx}
                 className="page flex items-center justify-center"
@@ -209,7 +353,7 @@ const InformationSystem = () => {
                 {images[idx] ? (
                   <img
                     src={images[idx]}
-                    alt={`Uploaded page ${idx + 1}`}
+                    alt={`${getPageLabel(idx)} image`}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -218,8 +362,26 @@ const InformationSystem = () => {
                     }}
                   />
                 ) : (
-                  <span style={{ color: 'white', fontSize: '1.2rem', opacity: 0.5 }}>No image uploaded for this page</span>
+                  <span style={{ color: 'white', fontSize: '1.2rem', opacity: 0.5 }}>{`No image uploaded for ${getPageLabel(idx)}`}</span>
                 )}
+                {/* Page number label */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 12,
+                    left: 0,
+                    width: '100%',
+                    textAlign: 'center',
+                    color: '#fff',
+                    fontSize: '1rem',
+                    opacity: 0.7,
+                    letterSpacing: '0.1em',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                  }}
+                >
+                  {getPageLabel(idx)}
+                </div>
               </div>
             ))}
           </HTMLFlipBook>
