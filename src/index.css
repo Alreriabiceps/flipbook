@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: night --default
+}
+
+.book-edges-background {
+    background-image: repeating-linear-gradient(
+        to right,
+        #f0f0f0, #f0f0f0 1px, /* Light line color */
+        #e0e0e0 1px, #e0e0e0 2px  /* Darker line color / gap */
+      ),
+      linear-gradient(to bottom, #f8f8f8, #d8d8d8); /* Vertical gradient */
+    background-size: 2px 100%, 100% 100%;
+}
+
