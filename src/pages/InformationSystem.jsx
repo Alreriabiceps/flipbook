@@ -86,7 +86,7 @@ const InformationSystem = () => {
 
   // Fetch images from backend on mount
   React.useEffect(() => {
-    fetch(`${process.env.REACT_APP_API_URL}/api/images`)
+    fetch(`${import.meta.env.VITE_API_URL}/api/images`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -151,10 +151,10 @@ const InformationSystem = () => {
         wrappedSetImages(newImages);
         // Send to backend
         try {
-          await fetch(`${process.env.REACT_APP_API_URL}/api/images`, {
+          await fetch(`${import.meta.env.VITE_API_URL}/api/images`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage, pageName: pageNames[selectedPage] }),
+            body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage, pageName: pageNames[selectedPage] })
           });
         } catch (err) {
           // Optionally handle backend error
@@ -196,10 +196,10 @@ const InformationSystem = () => {
           wrappedSetImages(newImages);
           // Send to backend
           try {
-            await fetch(`${process.env.REACT_APP_API_URL}/api/images`, {
+            await fetch(`${import.meta.env.VITE_API_URL}/api/images`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: data.secure_url, pageIndex: idx, pageName: pageNames[idx] }),
+              body: JSON.stringify({ url: data.secure_url, pageIndex: idx, pageName: pageNames[idx] })
             });
           } catch (err) {
             console.error('Failed to save image info to backend', err);
