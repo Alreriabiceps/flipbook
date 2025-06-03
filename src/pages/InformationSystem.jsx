@@ -86,7 +86,7 @@ const InformationSystem = () => {
 
   // Fetch images from backend on mount
   React.useEffect(() => {
-    fetch('http://localhost:3000/api/images')
+    fetch(`${process.env.REACT_APP_API_URL}/api/images`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -151,7 +151,7 @@ const InformationSystem = () => {
         wrappedSetImages(newImages);
         // Send to backend
         try {
-          await fetch('http://localhost:3000/api/images', {
+          await fetch(`${process.env.REACT_APP_API_URL}/api/images`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: data.secure_url, pageIndex: selectedPage, pageName: pageNames[selectedPage] }),
@@ -196,7 +196,7 @@ const InformationSystem = () => {
           wrappedSetImages(newImages);
           // Send to backend
           try {
-            await fetch('http://localhost:3000/api/images', {
+            await fetch(`${process.env.REACT_APP_API_URL}/api/images`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ url: data.secure_url, pageIndex: idx, pageName: pageNames[idx] }),

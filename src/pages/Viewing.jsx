@@ -21,7 +21,7 @@ const Viewing = () => {
   const flipSound = useRef(null);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/images')
+    fetch(`${process.env.REACT_APP_API_URL}/api/images`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
