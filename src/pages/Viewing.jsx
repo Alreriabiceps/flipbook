@@ -5,6 +5,7 @@ import { FaChevronLeft, FaChevronRight, FaVolumeMute, FaVolumeUp, FaThList } fro
 const Viewing = () => {
   const [images, setImages] = useState([]);
   const [totalPages, setTotalPages] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const flipBookRef = useRef();
   const [selectedPage, setSelectedPage] = useState(0);
   const [showToc, setShowToc] = useState(false);
@@ -21,6 +22,7 @@ const Viewing = () => {
   const flipSound = useRef(null);
 
   useEffect(() => {
+    setIsLoading(true);
     fetch(`${import.meta.env.VITE_API_URL}/api/images`)
       .then(res => res.json())
       .then(data => {
@@ -36,6 +38,9 @@ const Viewing = () => {
           setImages(imgs);
           setTotalPages(imgs.length);
         }
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, []);
 
@@ -79,154 +84,163 @@ const Viewing = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-sky-100 to-cyan-100 py-8 px-2 flex flex-col items-center justify-center">
-      <div className="w-full max-w-5xl mx-auto mb-2">
-        <div className="h-2 bg-gray-300 rounded">
-          <div
-            className="h-2 bg-blue-500 rounded transition-all duration-300"
-            style={{ width: `${((selectedPage + 1) / (totalPages || 1)) * 100}%` }}
-          />
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-blue-700 font-medium">Loading your yearbook...</p>
         </div>
-        <div className="text-center text-xs text-gray-700 mt-1">
-          <span>
-            {getPageLabel(selectedPage)} ({selectedPage + 1} / {totalPages})
-          </span>
-        </div>
-      </div>
-      <div className="w-full flex justify-center items-center max-w-7xl">
-        <div
-          className="relative w-full h-full flex justify-center items-center max-w-5xl"
-          style={{
-            perspective: "2500px",
-            transformStyle: "preserve-3d",
-          }}
-        >
-          <HTMLFlipBook
-            ref={flipBookRef}
-            width={bookRenderWidth}
-            height={bookRenderHeight}
-            size="stretch"
-            minWidth={minWidth}
-            maxWidth={maxWidth}
-            minHeight={minHeight}
-            maxHeight={maxHeight}
-            maxShadowOpacity={0.6}
-            showCover={true}
-            mobileScrollSupport={true}
-            useMouseEvents={true}
-            drawShadow={true}
-            flippingTime={800}
-            className="mx-auto relative z-10 shadow-xl"
-            style={{ transformStyle: "preserve-3d" }}
-            onFlip={handleFlip}
-          >
-            {images.map((img, idx) => (
+      ) : (
+        <>
+          <div className="w-full max-w-5xl mx-auto mb-2">
+            <div className="h-2 bg-gray-300 rounded">
               <div
-                key={idx}
-                className="page flex items-center justify-center"
-                style={{
-                  background: 'black',
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 0,
-                }}
+                className="h-2 bg-blue-500 rounded transition-all duration-300"
+                style={{ width: `${((selectedPage + 1) / (totalPages || 1)) * 100}%` }}
+              />
+            </div>
+            <div className="text-center text-xs text-gray-700 mt-1">
+              <span>
+                {getPageLabel(selectedPage)} ({selectedPage + 1} / {totalPages})
+              </span>
+            </div>
+          </div>
+          <div className="w-full flex justify-center items-center max-w-7xl">
+            <div
+              className="relative w-full h-full flex justify-center items-center max-w-5xl"
+              style={{
+                perspective: "2500px",
+                transformStyle: "preserve-3d",
+              }}
+            >
+              <HTMLFlipBook
+                ref={flipBookRef}
+                width={bookRenderWidth}
+                height={bookRenderHeight}
+                size="stretch"
+                minWidth={minWidth}
+                maxWidth={maxWidth}
+                minHeight={minHeight}
+                maxHeight={maxHeight}
+                maxShadowOpacity={0.6}
+                showCover={true}
+                mobileScrollSupport={true}
+                useMouseEvents={true}
+                drawShadow={true}
+                flippingTime={800}
+                className="mx-auto relative z-10 shadow-xl"
+                style={{ transformStyle: "preserve-3d" }}
+                onFlip={handleFlip}
               >
-                {img && img.url ? (
-                  <img
-                    src={img.url}
-                    alt={`Page ${idx} image`}
+                {images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="page flex items-center justify-center"
                     style={{
+                      background: 'black',
                       width: '100%',
                       height: '100%',
-                      objectFit: 'cover',
-                      display: 'block',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
                     }}
-                  />
-                ) : (
-                  <span style={{ color: 'white', fontSize: '1.2rem', opacity: 0.5 }}>{`No image uploaded for ${getPageLabel(idx)}`}</span>
-                )}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 12,
-                    left: 0,
-                    width: '100%',
-                    textAlign: 'center',
-                    color: '#fff',
-                    fontSize: '1rem',
-                    opacity: 0.7,
-                    letterSpacing: '0.1em',
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                  }}
-                >
-                  {getPageLabel(idx)}
-                </div>
-              </div>
-            ))}
-          </HTMLFlipBook>
-        </div>
-      </div>
-      {/* Quick Settings Bar */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/90 shadow-xl rounded-lg flex items-center gap-1 px-1.5 py-1 z-50 border border-gray-300" style={{ minWidth: 0 }}>
-        <button
-          onClick={handlePrev}
-          className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
-          disabled={selectedPage === 0}
-          title="Previous Page"
-        >
-          <FaChevronLeft size={14} />
-        </button>
-        <button
-          onClick={() => setShowToc((s) => !s)}
-          className={`p-1.5 rounded-full ${showToc ? 'bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
-          title={showToc ? 'Hide Table of Contents' : 'Show Table of Contents'}
-        >
-          <FaThList size={14} />
-        </button>
-        <button
-          onClick={() => setMuted((m) => !m)}
-          className={`p-1.5 rounded-full ${muted ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
-          title={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted ? (
-            <FaVolumeMute size={14} />
-          ) : (
-            <FaVolumeUp size={14} />
-          )}
-        </button>
-        <button
-          onClick={handleNext}
-          className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
-          disabled={selectedPage === totalPages - 1}
-          title="Next Page"
-        >
-          <FaChevronRight size={14} />
-        </button>
-      </div>
-      {/* Table of Contents Modal (Toggleable) */}
-      {showToc && (
-        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setShowToc(false)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-blue-700 mb-3">Table of Contents</h3>
-            <ul className="space-y-1">
-              {images.map((_, idx) => (
-                <li key={idx}>
-                  <button
-                    onClick={() => { goToPage(idx); setShowToc(false); }}
-                    className={`w-full text-left px-3 py-1.5 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'hover:bg-blue-100'} transition-colors text-sm`}
                   >
-                    {getPageLabel(idx)}
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    {img && img.url ? (
+                      <img
+                        src={img.url}
+                        alt={`Page ${idx} image`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                      />
+                    ) : (
+                      <span style={{ color: 'white', fontSize: '1.2rem', opacity: 0.5 }}>{`No image uploaded for ${getPageLabel(idx)}`}</span>
+                    )}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 12,
+                        left: 0,
+                        width: '100%',
+                        textAlign: 'center',
+                        color: '#fff',
+                        fontSize: '1rem',
+                        opacity: 0.7,
+                        letterSpacing: '0.1em',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {getPageLabel(idx)}
+                    </div>
+                  </div>
+                ))}
+              </HTMLFlipBook>
+            </div>
           </div>
-        </div>
+          {/* Quick Settings Bar */}
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/90 shadow-xl rounded-lg flex items-center gap-1 px-1.5 py-1 z-50 border border-gray-300" style={{ minWidth: 0 }}>
+            <button
+              onClick={handlePrev}
+              className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
+              disabled={selectedPage === 0}
+              title="Previous Page"
+            >
+              <FaChevronLeft size={14} />
+            </button>
+            <button
+              onClick={() => setShowToc((s) => !s)}
+              className={`p-1.5 rounded-full ${showToc ? 'bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+              title={showToc ? 'Hide Table of Contents' : 'Show Table of Contents'}
+            >
+              <FaThList size={14} />
+            </button>
+            <button
+              onClick={() => setMuted((m) => !m)}
+              className={`p-1.5 rounded-full ${muted ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+              title={muted ? 'Unmute' : 'Mute'}
+            >
+              {muted ? (
+                <FaVolumeMute size={14} />
+              ) : (
+                <FaVolumeUp size={14} />
+              )}
+            </button>
+            <button
+              onClick={handleNext}
+              className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-opacity"
+              disabled={selectedPage === totalPages - 1}
+              title="Next Page"
+            >
+              <FaChevronRight size={14} />
+            </button>
+          </div>
+          {/* Table of Contents Modal (Toggleable) */}
+          {showToc && (
+            <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setShowToc(false)}>
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-blue-700 mb-3">Table of Contents</h3>
+                <ul className="space-y-1">
+                  {images.map((_, idx) => (
+                    <li key={idx}>
+                      <button
+                        onClick={() => { goToPage(idx); setShowToc(false); }}
+                        className={`w-full text-left px-3 py-1.5 rounded ${selectedPage === idx ? 'bg-blue-600 text-white' : 'hover:bg-blue-100'} transition-colors text-sm`}
+                      >
+                        {getPageLabel(idx)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
