@@ -292,10 +292,7 @@ const FlipbookViewer = () => {
                   </div>
                 ))}
 
-                {/* Page Label */}
-                <div className="absolute bottom-2 left-0 right-0 text-center text-gray-600 text-sm">
-                  {imageData.pageName}
-                </div>
+
               </div>
             ))}
           </HTMLFlipBook>
