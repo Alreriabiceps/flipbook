@@ -12,6 +12,7 @@
   "dependencies": {
     "@tailwindcss/line-clamp": "^0.4.4",
     "@tailwindcss/vite": "^4.0.17",
+    "@vercel/analytics": "^1.5.0",
     "cors": "^2.8.5",
     "html2canvas": "^1.4.1",
     "jquery": "^3.7.1",
